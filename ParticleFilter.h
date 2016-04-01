@@ -2,6 +2,7 @@
 #define __PARTICLE_FILTER_H
 
 #include "opencv2/core/core.hpp"
+#include "AffineTransform.h"
 
 class ParticleFilter {
   public:
@@ -14,19 +15,18 @@ class ParticleFilter {
   private:
     class Particle {
       public:
-        Particle(int x, int y) {
-          this->x = x;
-          this->y = y;
+        Particle(AffineTransform t) {
+          this->t = t;
           this->score = 1;
         }
-        int x;
-        int y;
+        AffineTransform t;
         double score;
     };
 
     void getCosts(cv::Mat& frame, std::vector<std::pair<double, Particle> >& cdf);
     double inverseScore(double score);
-    double squareDiffCost(cv::Mat& source, cv::Mat& track);
+    double squareDiffCost(cv::Mat& source, cv::Mat& track,
+        AffineTransform at);
     void resample(std::vector<std::pair<double, Particle> >& cdf, cv::Mat& frame);
     void estimateState();
     Particle findParticle(std::vector<std::pair<double, Particle> >& cdf, 

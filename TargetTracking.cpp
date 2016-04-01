@@ -41,7 +41,7 @@ int main( int argc, char** argv )
     if (key == 'q') break;
     video >> frame;
     if (!initalised) {
-      particleFilter.initalise(frame, objectToTrack, 1000);
+      particleFilter.initalise(frame, objectToTrack, 10);
       initalised = true;
     }
     particleFilter.update(frame);

@@ -5,14 +5,9 @@
 
 class AffineTransform {
   public:
+    AffineTransform();
     AffineTransform(cv::Point translation, cv::Point scale,
-        cv::Point shear, double rotation) : 
-        translation(translation),
-        scale(scale),
-        shear(shear),
-        rotation(rotation) {
-          createTransformMatrix();
-        }
+        cv::Point shear, double rotation); 
     cv::Point getTranslation();
     double getRotation();
     cv::Point getScale();

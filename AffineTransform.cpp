@@ -4,12 +4,25 @@
 using namespace std;
 using namespace cv;
 
+AffineTransform::AffineTransform(Point translation, Point scale,
+    Point shear, double rotation) {
+  this->translation = translation;
+  this->scale = scale;
+  this->shear = shear;
+  this->rotation = rotation;
+  createTransformMatrix();
+}
+
+AffineTransform::AffineTransform() {
+  AffineTransform(Point(0, 0), Point(1, 1), Point(0, 0), 0);
+}
+
 Point AffineTransform::getTranslation() {
   return translation;
 }
 
 double AffineTransform::getRotation() {
-  reutrn rotation;
+  return rotation;
 }
 
 Point AffineTransform::getScale() {
@@ -25,8 +38,8 @@ Point AffineTransform::transformPoint(Point point) {
   p.at<double>(0,0) = point.x;
   p.at<double>(1,0) = point.y;
   p.at<double>(2,0) = 1;
-  // return transform * p
-  return Point(1, 1);
+  Mat result = transform * p;
+  return Point(result.at<double>(0, 0), result.at<double>(1, 0));
 }
 
 void AffineTransform::createTransformMatrix() {
@@ -56,6 +69,7 @@ void AffineTransform::createTransformMatrix() {
   translationM.at<double>(1, 1) = cos(rotation);
   translationM.at<double>(2, 2) = 1; 
   
-  transform = Mat(2,3,CV_64F, cvScalar(0.0));
   // translation * shearing * scaling * rotation
+  Mat result = translationM * (shearM * (scaleM * rotation));
+  transform = Mat(result.rows - 1, result.cols, CV_64F, result.data);
 }

@@ -12,11 +12,12 @@ void ParticleFilter::initalise(Mat& frame, Mat& track, int numParticles) {
   particles.clear();
   // Randomly distribute particles over image
   for (int i = 0; i < numParticles; ++i) {
-    double x = ((double)rand() / (double)RAND_MAX) * 
-        (frame.cols - track.cols);
-    double y = ((double)rand() / (double)RAND_MAX) * 
-        (frame.rows - track.rows);
-    Particle p = Particle(x, y);
+    Particle p = Particle(
+        AffineTransform(
+            Point(frame.rows/2, frame.cols/2), // Translation
+            Point(1, 1), // Scale
+            Point(0, 0), // Shear
+            0)); // Rotation
     particles.push_back(p);
   } 
 }
@@ -33,10 +34,11 @@ void ParticleFilter::estimateState() {
   // Weighted average
   double avX = 0;
   double avY = 0;
-  for (vector<Particle>::iterator it = particles.begin(); it != particles.end();
-    ++it) {
-    avX += (double)it->x * ((double)it->score / totalCost);
-    avY += (double)it->y * ((double)it->score / totalCost);
+  for (vector<Particle>::iterator it = particles.begin(); 
+      it != particles.end(); ++it) {
+    Point p = it->t.getTranslation();
+    avX += p.x * ((double)it->score / totalCost);
+    avY += p.y * ((double)it->score / totalCost);
   }
   estimateLoc.x = avX;
   estimateLoc.y = avY;
@@ -62,34 +64,40 @@ ParticleFilter::Particle ParticleFilter::findParticle(
   abort();
 }
 
-void ParticleFilter::resample(vector<pair<double, Particle> >& cdf, Mat& frame) {
-  for (vector<Particle>::iterator it = particles.begin(); it != particles.end();
-      ++it) {
+AffineTransform mutateTransform(AffineTransform t, Mat& frame, Mat& tracked) {
+  int noise = 20;
+  Point trans = t.getTranslation();
+  trans.x += -(noise/2) + (((double)rand() / (double)RAND_MAX) * noise);
+  trans.y += -(noise/2) + (((double)rand() / (double)RAND_MAX) * noise);
+  // keep the particle in the image
+  trans.x = trans.x < 0 ? 0 :
+    trans.x > frame.cols - tracked.cols ? frame.cols - tracked.cols :
+    trans.x;
+  trans.y = trans.y < 0 ? 0 :
+    trans.y > frame.rows - tracked.rows ? frame.rows - tracked.rows :
+    trans.y;
+  return AffineTransform(trans, t.getScale(), t.getShear(),
+      t.getRotation());
+}
+
+void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
+    Mat& frame) {
+  for (vector<Particle>::iterator it = particles.begin(); 
+      it != particles.end(); ++it) {
     double random = ((double)rand() / (double)RAND_MAX) * totalCost;
     Particle p = findParticle(cdf, random);
     *it = p;
-    // Add some noise
-    int noise = 20;
-    it->x += -(noise/2) + (((double)rand() / (double)RAND_MAX) * noise);
-    it->y += -(noise/2) + (((double)rand() / (double)RAND_MAX) * noise);
-    // keep the particle in the image
-    it->x = it->x < 0 ? 0 :
-      it->x > frame.cols - tracked.cols ? frame.cols - tracked.cols :
-      it->x;
-    it->y = it->y < 0 ? 0 :
-      it->y > frame.rows - tracked.rows ? frame.rows - tracked.rows :
-      it->y;
+    it->t = mutateTransform(it->t, frame, tracked);
   }
 }
 
-void ParticleFilter::getCosts(Mat& frame, vector<pair<double, Particle> >& cdf) {
+void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
+  Particle> >& cdf) {
   totalCost = 0;
   for (vector<Particle>::iterator it = particles.begin(); 
       it != particles.end(); ++it) {
-    cout << it->x << " " << it->y << endl;
-    Rect myROI(it->x, it->y, tracked.cols, tracked.rows);
-    Mat roi = frame(myROI);
-    double score = squareDiffCost(roi, tracked);
+    cout << it->t.getTranslation() << endl;
+    double score = squareDiffCost(frame, tracked, it->t);
     it->score = inverseScore(score);
     totalCost += it->score;
     cout << totalCost << " " << score << " " << it->score << endl;
@@ -105,15 +113,17 @@ double ParticleFilter::inverseScore(double score) {
   return ((maxScore - score) / maxScore) + 0.00001;
 }
 
-double ParticleFilter::squareDiffCost(Mat& source, Mat& track) {
+double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
+    AffineTransform at) {
   double totalCost = 0;
   for (int row = 0; row < track.rows; ++row) {
     Vec3b *t = track.ptr<Vec3b>(row);
-    Vec3b *s = source.ptr<Vec3b>(row);
     for (int col = 0; col < track.cols; ++col) {
-      int r = (int)t[col][0] - (int)s[col][0];
-      int g = (int)t[col][1] - (int)s[col][1];
-      int b = (int)t[col][2] - (int)s[col][2];
+      Point fp = at.transformPoint(Point(row, col));
+      Vec3b *fr = frame.ptr<Vec3b>(fp.x);
+      int r = (int)t[col][0] - (int)fr[fp.y][0];
+      int g = (int)t[col][1] - (int)fr[fp.y][1];
+      int b = (int)t[col][2] - (int)fr[fp.y][2];
       totalCost += (r * r) + (g * g) + (b * b);
     }
   }
@@ -126,8 +136,8 @@ Point ParticleFilter::getLocation() {
 }
 
 void ParticleFilter::drawParticles(Mat& dest, Scalar color) {
-  for (vector<Particle>::iterator it = particles.begin(); it != particles.end();
-      ++it) {
-    circle(dest, Point(it->x, it->y), 3, color, -1);
+  for (vector<Particle>::iterator it = particles.begin();
+      it != particles.end(); ++it) {
+    circle(dest, it->t.getTranslation(), 3, color, -1);
   }
 }

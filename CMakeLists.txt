@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
 project( TargetTracking )
 find_package( OpenCV REQUIRED )
-add_executable( TargetTracking TargetTracking.cpp ParticleFilter.cpp)
+add_executable( TargetTracking TargetTracking.cpp ParticleFilter.cpp AffineTransform.cpp)
 target_link_libraries( TargetTracking ${OpenCV_LIBS} )
