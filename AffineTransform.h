@@ -8,10 +8,12 @@ class AffineTransform {
     AffineTransform();
     AffineTransform(cv::Point translation, cv::Point scale,
         cv::Point shear, double rotation); 
-    cv::Point getTranslation();
-    double getRotation();
-    cv::Point getScale();
-    cv::Point getShear();
+    AffineTransform(const AffineTransform &a);
+    cv::Point getTranslation() const;
+    double getRotation() const;
+    cv::Point getScale() const;
+    cv::Point getShear() const;
+    cv::Mat getTransform() const;
     cv::Point transformPoint(cv::Point point);
 
   private:
@@ -22,6 +24,8 @@ class AffineTransform {
     cv::Point shear;
     double rotation;
     cv::Mat transform;
+
+    bool init;
 };
 
 #endif

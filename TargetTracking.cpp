@@ -23,8 +23,6 @@ int main( int argc, char** argv )
   video >> frame;
   imshow("d", frame);
   waitKey(0);
-
-  namedWindow("Tracking window", CV_WINDOW_NORMAL);
    
   Mat objectToTrack = imread(argv[1], CV_LOAD_IMAGE_COLOR);
   if (!objectToTrack.data) {
@@ -41,7 +39,7 @@ int main( int argc, char** argv )
     if (key == 'q') break;
     video >> frame;
     if (!initalised) {
-      particleFilter.initalise(frame, objectToTrack, 10);
+      particleFilter.initalise(frame, objectToTrack, 100);
       initalised = true;
     }
     particleFilter.update(frame);

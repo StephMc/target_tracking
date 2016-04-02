@@ -40,8 +40,8 @@ void ParticleFilter::estimateState() {
     avX += p.x * ((double)it->score / totalCost);
     avY += p.y * ((double)it->score / totalCost);
   }
-  estimateLoc.x = avX;
-  estimateLoc.y = avY;
+  estimateLoc.x = avY;
+  estimateLoc.y = avX;
 }
 
 ParticleFilter::Particle ParticleFilter::findParticle(
@@ -76,8 +76,7 @@ AffineTransform mutateTransform(AffineTransform t, Mat& frame, Mat& tracked) {
   trans.y = trans.y < 0 ? 0 :
     trans.y > frame.rows - tracked.rows ? frame.rows - tracked.rows :
     trans.y;
-  return AffineTransform(trans, t.getScale(), t.getShear(),
-      t.getRotation());
+  return AffineTransform(trans, Point(1, 1), Point(0, 0),0);
 }
 
 void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
@@ -96,7 +95,7 @@ void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
   totalCost = 0;
   for (vector<Particle>::iterator it = particles.begin(); 
       it != particles.end(); ++it) {
-    cout << it->t.getTranslation() << endl;
+    cout << it->t.getTransform() << endl;
     double score = squareDiffCost(frame, tracked, it->t);
     it->score = inverseScore(score);
     totalCost += it->score;
@@ -107,7 +106,7 @@ void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
 
 double ParticleFilter::inverseScore(double score) {
   // Doesn't take into account the mask - doubt this makes a different
-  double cap = 25;
+  double cap = 50;
   double maxScore = tracked.cols * tracked.rows * 3 * cap * cap;
   if (score > maxScore) score = maxScore;
   return ((maxScore - score) / maxScore) + 0.00001;
@@ -120,6 +119,8 @@ double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
     Vec3b *t = track.ptr<Vec3b>(row);
     for (int col = 0; col < track.cols; ++col) {
       Point fp = at.transformPoint(Point(row, col));
+      //cout << "Transformed (" << row << " " << col << ") to (" <<
+      //  fp.x << " " << fp.y << ")" << endl;
       Vec3b *fr = frame.ptr<Vec3b>(fp.x);
       int r = (int)t[col][0] - (int)fr[fp.y][0];
       int g = (int)t[col][1] - (int)fr[fp.y][1];
@@ -138,6 +139,8 @@ Point ParticleFilter::getLocation() {
 void ParticleFilter::drawParticles(Mat& dest, Scalar color) {
   for (vector<Particle>::iterator it = particles.begin();
       it != particles.end(); ++it) {
-    circle(dest, it->t.getTranslation(), 3, color, -1);
+    // X & Y has been inversed...
+    Point p = it->t.getTranslation();
+    circle(dest, Point(p.y, p.x), 3, color, -1);
   }
 }
