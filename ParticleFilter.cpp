@@ -3,6 +3,8 @@
 #include "ParticleFilter.h"
 #include <stdlib.h>
 #include <iostream>
+#include <boost/random.hpp>
+#include <boost/random/normal_distribution.hpp>
 
 using namespace std;
 using namespace cv;
@@ -13,11 +15,10 @@ void ParticleFilter::initalise(Mat& frame, Mat& track, int numParticles) {
   // Randomly distribute particles over image
   for (int i = 0; i < numParticles; ++i) {
     Particle p = Particle(
-        AffineTransform(
-            Point(frame.rows/2, frame.cols/2), // Translation
-            Point(1, 1), // Scale
-            Point(0, 0), // Shear
-            0)); // Rotation
+        PerspectiveTransform(
+            Point3d(0, 0, frame.cols), // Translation
+            Point3d(0, 0, 0), // Rotation
+            Point3d(-frame.cols / 2, -frame.rows / 2, frame.cols)));
     particles.push_back(p);
   } 
 }
@@ -34,14 +35,15 @@ void ParticleFilter::estimateState() {
   // Weighted average
   double avX = 0;
   double avY = 0;
+  Point3d va = particles[0].t.getViewingAngle();
   for (vector<Particle>::iterator it = particles.begin(); 
       it != particles.end(); ++it) {
-    Point p = it->t.getTranslation();
+    Point3d p = it->t.getTranslation();
     avX += p.x * ((double)it->score / totalCost);
     avY += p.y * ((double)it->score / totalCost);
   }
-  estimateLoc.x = avY;
-  estimateLoc.y = avX;
+  estimateLoc.x = avY - va.y;
+  estimateLoc.y = avX - va.x;
 }
 
 ParticleFilter::Particle ParticleFilter::findParticle(
@@ -64,19 +66,26 @@ ParticleFilter::Particle ParticleFilter::findParticle(
   abort();
 }
 
-AffineTransform mutateTransform(AffineTransform t, Mat& frame, Mat& tracked) {
+PerspectiveTransform
+    ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
+    Mat& tracked) {
   int noise = 20;
-  Point trans = t.getTranslation();
-  trans.x += -(noise/2) + (((double)rand() / (double)RAND_MAX) * noise);
-  trans.y += -(noise/2) + (((double)rand() / (double)RAND_MAX) * noise);
+  Point3d trans = t.getTranslation();
+  // todo: gaussian
+  boost::normal_distribution<> nd(0.0, 1.0);
+  boost::variate_generator<boost::mt19937&, 
+      boost::normal_distribution<> > var_nor(rng, nd);
+  trans.x += var_nor() * noise;
+  trans.y += var_nor() * noise;
   // keep the particle in the image
-  trans.x = trans.x < 0 ? 0 :
-    trans.x > frame.cols - tracked.cols ? frame.cols - tracked.cols :
-    trans.x;
-  trans.y = trans.y < 0 ? 0 :
-    trans.y > frame.rows - tracked.rows ? frame.rows - tracked.rows :
-    trans.y;
-  return AffineTransform(trans, Point(1, 1), Point(0, 0),0);
+  trans.x = trans.x < -frame.rows / 2 ? -frame.rows / 2 :
+    trans.x > (frame.rows / 2) - tracked.rows ?
+    (frame.rows / 2) - tracked.rows : trans.x;
+  trans.y = trans.y < -frame.cols / 2 ? -frame.cols / 2 :
+    trans.y > (frame.cols / 2) - tracked.cols ?
+    (frame.cols / 2) - tracked.cols : trans.y;
+  return 
+    PerspectiveTransform(trans, Point3d(0, 0, 0), t.getViewingAngle());
 }
 
 void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
@@ -95,11 +104,11 @@ void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
   totalCost = 0;
   for (vector<Particle>::iterator it = particles.begin(); 
       it != particles.end(); ++it) {
-    cout << it->t.getTransform() << endl;
+    //cout << it->t.getTransform() << endl;
     double score = squareDiffCost(frame, tracked, it->t);
     it->score = inverseScore(score);
     totalCost += it->score;
-    cout << totalCost << " " << score << " " << it->score << endl;
+    //cout << totalCost << " " << score << " " << it->score << endl;
     cdf.push_back(make_pair(totalCost, *it));
   }
 }
@@ -113,7 +122,7 @@ double ParticleFilter::inverseScore(double score) {
 }
 
 double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
-    AffineTransform at) {
+    PerspectiveTransform at) {
   double totalCost = 0;
   for (int row = 0; row < track.rows; ++row) {
     Vec3b *t = track.ptr<Vec3b>(row);
@@ -131,7 +140,6 @@ double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
   return totalCost;
 }
 
-
 Point ParticleFilter::getLocation() {
   return estimateLoc;
 }
@@ -140,7 +148,8 @@ void ParticleFilter::drawParticles(Mat& dest, Scalar color) {
   for (vector<Particle>::iterator it = particles.begin();
       it != particles.end(); ++it) {
     // X & Y has been inversed...
-    Point p = it->t.getTranslation();
-    circle(dest, Point(p.y, p.x), 3, color, -1);
+    Point3d p = it->t.getTranslation();
+    Point3d va = it->t.getViewingAngle();
+    circle(dest, Point(p.y - va.y, p.x - va.x), 3, color, -1);
   }
 }
