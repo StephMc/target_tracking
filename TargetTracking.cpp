@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "ParticleFilter.h"
+#include "PerspectiveTransform.h"
 
 using namespace std;
 using namespace cv;
@@ -45,10 +46,18 @@ int main( int argc, char** argv )
     particleFilter.update(frame);
 
     // Draw predicted location
-    Point matchLocP = particleFilter.getLocation();
-    rectangle(frame, matchLocP,
-        Point(matchLocP.x + objectToTrack.cols , matchLocP.y + objectToTrack.rows),
-        Scalar::all(100), 2, 8, 0);
+    PerspectiveTransform est = particleFilter.getEstimateTransform();
+    Point tl(0, 0), tr(objectToTrack.cols, 0), bl(0, objectToTrack.rows),
+         br(objectToTrack.cols, objectToTrack.rows);
+    line(frame, est.transformPoint(tl), est.transformPoint(tr),
+        CV_RGB(255, 0, 0));
+    line(frame, est.transformPoint(tr), est.transformPoint(br),
+        CV_RGB(255, 0, 0));
+    line(frame, est.transformPoint(br), est.transformPoint(bl),
+        CV_RGB(255, 0, 0));
+    line(frame, est.transformPoint(bl), est.transformPoint(tl),
+        CV_RGB(255, 0, 0));
+
     particleFilter.drawParticles(frame, Scalar::all(100));
 
     imshow("Tracking window", frame);

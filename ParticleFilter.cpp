@@ -33,17 +33,16 @@ void ParticleFilter::update(Mat& frame) {
 
 void ParticleFilter::estimateState() {
   // Weighted average
-  double avX = 0;
-  double avY = 0;
+  Point3d trans(0, 0, 0), rotation(0, 0, 0);
   Point3d va = particles[0].t.getViewingAngle();
   for (vector<Particle>::iterator it = particles.begin(); 
       it != particles.end(); ++it) {
-    Point3d p = it->t.getTranslation();
-    avX += p.x * ((double)it->score / totalCost);
-    avY += p.y * ((double)it->score / totalCost);
+    Point3d ts = it->t.getTranslation();
+    Point3d r = it->t.getRotation();
+    trans += ts * ((double)it->score / totalCost);
+    rotation += r * ((double)it->score / totalCost);
   }
-  estimateLoc.x = avY - va.y;
-  estimateLoc.y = avX - va.x;
+  estimateTrans = PerspectiveTransform(trans, rotation, va);
 }
 
 ParticleFilter::Particle ParticleFilter::findParticle(
@@ -76,12 +75,12 @@ void ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
   trans.x += var_nor() * noise;
   trans.y += var_nor() * noise;
   // keep the particle in the image
-  trans.x = trans.x < -frame.rows / 2 ? -frame.rows / 2 :
-    trans.x > (frame.rows / 2) - tracked.rows ?
-    (frame.rows / 2) - tracked.rows : trans.x;
-  trans.y = trans.y < -frame.cols / 2 ? -frame.cols / 2 :
-    trans.y > (frame.cols / 2) - tracked.cols ?
-    (frame.cols / 2) - tracked.cols : trans.y;
+  trans.x = trans.x < -frame.cols / 2 ? -frame.cols / 2 :
+    trans.x > (frame.cols / 2) - tracked.cols ?
+    (frame.cols / 2) - tracked.cols : trans.x;
+  trans.y = trans.y < -frame.rows / 2 ? -frame.rows / 2 :
+    trans.y > (frame.rows / 2) - tracked.rows ?
+    (frame.rows / 2) - tracked.rows : trans.y;
   t = PerspectiveTransform(trans, Point3d(0, 0, 0), t.getViewingAngle());
 }
 
@@ -124,29 +123,28 @@ double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
   for (int row = 0; row < track.rows; ++row) {
     Vec3b *t = track.ptr<Vec3b>(row);
     for (int col = 0; col < track.cols; ++col) {
-      Point fp = at.transformPoint(Point(row, col));
+      Point fp = at.transformPoint(Point(col, row));
       //cout << "Transformed (" << row << " " << col << ") to (" <<
       //  fp.x << " " << fp.y << ")" << endl;
-      Vec3b *fr = frame.ptr<Vec3b>(fp.x);
-      int r = (int)t[col][0] - (int)fr[fp.y][0];
-      int g = (int)t[col][1] - (int)fr[fp.y][1];
-      int b = (int)t[col][2] - (int)fr[fp.y][2];
+      Vec3b *fr = frame.ptr<Vec3b>(fp.y);
+      int r = (int)t[col][0] - (int)fr[fp.x][0];
+      int g = (int)t[col][1] - (int)fr[fp.x][1];
+      int b = (int)t[col][2] - (int)fr[fp.x][2];
       totalCost += (r * r) + (g * g) + (b * b);
     }
   }
   return totalCost;
 }
 
-Point ParticleFilter::getLocation() {
-  return estimateLoc;
+PerspectiveTransform ParticleFilter::getEstimateTransform() {
+  return estimateTrans;
 }
 
 void ParticleFilter::drawParticles(Mat& dest, Scalar color) {
   for (vector<Particle>::iterator it = particles.begin();
       it != particles.end(); ++it) {
-    // X & Y has been inversed...
     Point3d p = it->t.getTranslation();
     Point3d va = it->t.getViewingAngle();
-    circle(dest, Point(p.y - va.y, p.x - va.x), 3, color, -1);
+    circle(dest, Point(p.x - va.x, p.y - va.y), 3, color, -1);
   }
 }

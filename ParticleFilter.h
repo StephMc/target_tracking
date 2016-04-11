@@ -11,7 +11,7 @@ class ParticleFilter {
     ParticleFilter(){};
     void initalise(cv::Mat& frame, cv::Mat& track, int numParticles);
     void update(cv::Mat& frame);
-    cv::Point getLocation();
+    PerspectiveTransform getEstimateTransform();
     void drawParticles(cv::Mat& dest, cv::Scalar color);
 
   private:
@@ -40,7 +40,7 @@ class ParticleFilter {
     cv::Mat mask;
     std::vector<Particle> particles;
     double totalCost;
-    cv::Point estimateLoc;
+    PerspectiveTransform estimateTrans;
     boost::mt19937 rng;
 };
 
