@@ -23,6 +23,8 @@ class PerspectiveTransform {
     cv::Point3d viewingAngle;
     cv::Mat transform;
 
+    cv::Mat result;
+    cv::Mat p;
     bool init;
 };
 

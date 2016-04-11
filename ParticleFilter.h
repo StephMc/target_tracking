@@ -33,7 +33,7 @@ class ParticleFilter {
     void estimateState();
     Particle findParticle(std::vector<std::pair<double, Particle> >& cdf, 
         double target);
-    PerspectiveTransform mutateTransform(PerspectiveTransform& t,
+    void mutateTransform(PerspectiveTransform& t,
         cv::Mat& frame, cv::Mat& tracked);
 
     cv::Mat tracked;

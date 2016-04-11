@@ -47,39 +47,36 @@ Mat PerspectiveTransform::getTransform() const {
 // Point is in template frame of reference
 Point PerspectiveTransform::transformPoint(Point point) {
   if (!init) abort();
-  Mat p(3,1,CV_64F);
-  p.at<double>(0,0) = point.x + translation.x;
-  p.at<double>(1,0) = point.y + translation.y;
-  p.at<double>(2,0) = translation.z;
-  Mat result = transform * p;
-  //cout << transform << " * " << p << " = " << result << endl;
-  return Point(result.at<double>(0, 0) * 
-      (viewingAngle.z / result.at<double>(0, 2)) - viewingAngle.x,
-       result.at<double>(1, 0) * 
-       (viewingAngle.z / result.at<double>(0, 2)) - viewingAngle.y);
+  double px = point.x + translation.x;
+  double py = point.y + translation.y;
+  double pz = translation.z;
+  double result[3];
+  for (int i = 0; i < 3; ++i) {
+    double *t = transform.ptr<double>(i);
+    result[i] = t[0] * px + t[1] * py + t[2] * pz;
+  }
+  return Point(result[0] * (viewingAngle.z / result[2]) - viewingAngle.x,
+       result[1] * (viewingAngle.z / result[2]) - viewingAngle.y);
 }
 
 void PerspectiveTransform::createTransformMatrix() {
-  Mat mX = Mat(3, 3, CV_64F, cvScalar(0.0));
-  mX.at<double>(0, 0) = 1;
+  Mat mX = Mat::eye(3, 3, CV_64F);
   mX.at<double>(1, 1) = cos(rotation.x);
   mX.at<double>(1, 2) = -sin(rotation.x);
   mX.at<double>(2, 1) = sin(rotation.x);
   mX.at<double>(2, 2) = cos(rotation.x);
   
-  Mat mY = Mat(3, 3, CV_64F, cvScalar(0.0));
+  Mat mY = Mat::eye(3, 3, CV_64F);
   mY.at<double>(0, 0) = cos(rotation.y);
   mY.at<double>(0, 2) = sin(rotation.y);
-  mY.at<double>(1, 1) = 1;
   mY.at<double>(2, 0) = -sin(rotation.y);
   mY.at<double>(2, 2) = cos(rotation.y);
  
-  Mat mZ = Mat(3, 3, CV_64F, cvScalar(0.0));
+  Mat mZ = Mat::eye(3, 3, CV_64F);
   mZ.at<double>(0, 0) = cos(rotation.z);
   mZ.at<double>(0, 1) = -sin(rotation.z);
   mZ.at<double>(1, 0) = sin(rotation.z);
-  mZ.at<double>(1, 1) = cos(rotation.y);
-  mZ.at<double>(2, 2) = 1;
+  mZ.at<double>(1, 1) = cos(rotation.z);
  
   transform = mX * (mY * mZ);
 }

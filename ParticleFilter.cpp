@@ -66,12 +66,10 @@ ParticleFilter::Particle ParticleFilter::findParticle(
   abort();
 }
 
-PerspectiveTransform
-    ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
+void ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
     Mat& tracked) {
   int noise = 20;
   Point3d trans = t.getTranslation();
-  // todo: gaussian
   boost::normal_distribution<> nd(0.0, 1.0);
   boost::variate_generator<boost::mt19937&, 
       boost::normal_distribution<> > var_nor(rng, nd);
@@ -84,8 +82,7 @@ PerspectiveTransform
   trans.y = trans.y < -frame.cols / 2 ? -frame.cols / 2 :
     trans.y > (frame.cols / 2) - tracked.cols ?
     (frame.cols / 2) - tracked.cols : trans.y;
-  return 
-    PerspectiveTransform(trans, Point3d(0, 0, 0), t.getViewingAngle());
+  t = PerspectiveTransform(trans, Point3d(0, 0, 0), t.getViewingAngle());
 }
 
 void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
@@ -95,7 +92,7 @@ void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
     double random = ((double)rand() / (double)RAND_MAX) * totalCost;
     Particle p = findParticle(cdf, random);
     *it = p;
-    it->t = mutateTransform(it->t, frame, tracked);
+    mutateTransform(it->t, frame, tracked);
   }
 }
 
@@ -118,7 +115,7 @@ double ParticleFilter::inverseScore(double score) {
   double cap = 50;
   double maxScore = tracked.cols * tracked.rows * 3 * cap * cap;
   if (score > maxScore) score = maxScore;
-  return ((maxScore - score) / maxScore) + 0.00001;
+  return ((maxScore - score) / maxScore) + 0.01;
 }
 
 double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
