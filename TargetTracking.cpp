@@ -40,7 +40,7 @@ int main( int argc, char** argv )
     if (key == 'q') break;
     video >> frame;
     if (!initalised) {
-      particleFilter.initalise(frame, objectToTrack, 300);
+      particleFilter.initalise(frame, objectToTrack, 500);
       initalised = true;
     }
     particleFilter.update(frame);
@@ -58,6 +58,8 @@ int main( int argc, char** argv )
     line(frame, est.transformPoint(bl), est.transformPoint(tl),
         CV_RGB(255, 0, 0));
 
+    cout << est.getTranslation() << endl;
+    cout << est.getRotation() << endl;
     particleFilter.drawParticles(frame, Scalar::all(100));
 
     imshow("Tracking window", frame);

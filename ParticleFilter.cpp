@@ -67,21 +67,31 @@ ParticleFilter::Particle ParticleFilter::findParticle(
 
 void ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
     Mat& tracked) {
-  int noise = 20;
+  int noise = 15;
   Point3d trans = t.getTranslation();
   boost::normal_distribution<> nd(0.0, 1.0);
   boost::variate_generator<boost::mt19937&, 
       boost::normal_distribution<> > var_nor(rng, nd);
   trans.x += var_nor() * noise;
   trans.y += var_nor() * noise;
+  trans.z += var_nor() * noise;
   // keep the particle in the image
   trans.x = trans.x < -frame.cols / 2 ? -frame.cols / 2 :
-    trans.x > (frame.cols / 2) - tracked.cols ?
-    (frame.cols / 2) - tracked.cols : trans.x;
+    trans.x > (frame.cols / 2) ? (frame.cols / 2) : trans.x;
   trans.y = trans.y < -frame.rows / 2 ? -frame.rows / 2 :
-    trans.y > (frame.rows / 2) - tracked.rows ?
-    (frame.rows / 2) - tracked.rows : trans.y;
-  t = PerspectiveTransform(trans, Point3d(0, 0, 0), t.getViewingAngle());
+    trans.y > (frame.rows / 2) ? (frame.rows / 2) : trans.y;
+  trans.z = trans.z > frame.cols * 1.5 ? frame.cols * 1.5 :
+    trans.z < frame.cols * 0.5 ? frame.cols * 0.5 : trans.z;
+
+  Point3d rot = t.getRotation();
+  rot.x += var_nor() * 0.005;
+  rot.y += var_nor() * 0.005;
+  rot.z += var_nor() * 0.15;
+  rot.x = rot.x > 0.05 ? 0.05 : rot.x < -0.05 ? -0.05 : rot.x;
+  rot.y = rot.y > 0.05 ? 0.05 : rot.y < -0.05 ? -0.05 : rot.y;
+  rot.z = rot.z > 1 ? 1 : rot.z < -1 ? -1 : rot.z;
+
+  t = PerspectiveTransform(trans, rot, t.getViewingAngle());
 }
 
 void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
@@ -124,6 +134,10 @@ double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
     Vec3b *t = track.ptr<Vec3b>(row);
     for (int col = 0; col < track.cols; ++col) {
       Point fp = at.transformPoint(Point(col, row));
+      if (fp.x < 0 || fp.x > frame.cols || fp.y < 0 || fp.y > frame.rows) {
+        return 50 * 50 * 50 * track.cols * track.rows;
+        //continue; // out of bounds
+      }
       //cout << "Transformed (" << row << " " << col << ") to (" <<
       //  fp.x << " " << fp.y << ")" << endl;
       Vec3b *fr = frame.ptr<Vec3b>(fp.y);
