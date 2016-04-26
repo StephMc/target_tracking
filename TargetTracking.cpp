@@ -16,12 +16,15 @@ using namespace cv;
 int main( int argc, char** argv )
 {
   Mat frame;
+  namedWindow("Tracking window", WINDOW_NORMAL);
   VideoCapture video(0);
   if (!video.isOpened()) {
     cout << "Failed to open video stream" << endl;
     return -1;
   }
   video >> frame;
+  resize(frame, frame, Size(), 0.35, 0.35);
+  cout << frame.cols << " " << frame.rows << endl;
   imshow("d", frame);
   waitKey(0);
    
@@ -30,6 +33,7 @@ int main( int argc, char** argv )
     cout << "Failed to open template image" << endl;
     return -1;
   }
+  cout << objectToTrack.cols << " " << objectToTrack.rows << endl;
   imshow("d", objectToTrack);
   waitKey(0);
 
@@ -39,8 +43,9 @@ int main( int argc, char** argv )
     char key = waitKey(1);
     if (key == 'q') break;
     video >> frame;
+    resize(frame, frame, Size(), 0.35, 0.35);
     if (!initalised) {
-      particleFilter.initalise(frame, objectToTrack, 500);
+      particleFilter.initalise(frame, objectToTrack, 1000);
       initalised = true;
     }
     particleFilter.update(frame);

@@ -67,7 +67,7 @@ ParticleFilter::Particle ParticleFilter::findParticle(
 
 void ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
     Mat& tracked) {
-  int noise = 15;
+  int noise = 5;
   Point3d trans = t.getTranslation();
   boost::normal_distribution<> nd(0.0, 1.0);
   boost::variate_generator<boost::mt19937&, 
@@ -86,10 +86,10 @@ void ParticleFilter::mutateTransform(PerspectiveTransform& t, Mat& frame,
   Point3d rot = t.getRotation();
   rot.x += var_nor() * 0.005;
   rot.y += var_nor() * 0.005;
-  rot.z += var_nor() * 0.15;
+  rot.z += var_nor() * 0.25;
   rot.x = rot.x > 0.05 ? 0.05 : rot.x < -0.05 ? -0.05 : rot.x;
   rot.y = rot.y > 0.05 ? 0.05 : rot.y < -0.05 ? -0.05 : rot.y;
-  rot.z = rot.z > 1 ? 1 : rot.z < -1 ? -1 : rot.z;
+  rot.z = rot.z > 2 ? 2 : rot.z < -2 ? -2 : rot.z;
 
   t = PerspectiveTransform(trans, rot, t.getViewingAngle());
 }
@@ -124,7 +124,7 @@ double ParticleFilter::inverseScore(double score) {
   double cap = 50;
   double maxScore = tracked.cols * tracked.rows * 3 * cap * cap;
   if (score > maxScore) score = maxScore;
-  return ((maxScore - score) / maxScore) + 0.01;
+  return ((maxScore - score) / maxScore) + 0.001;
 }
 
 double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
@@ -145,6 +145,7 @@ double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
       int g = (int)t[col][1] - (int)fr[fp.x][1];
       int b = (int)t[col][2] - (int)fr[fp.x][2];
       totalCost += (r * r) + (g * g) + (b * b);
+      //totalCost += abs(r + g + b) * 16;
     }
   }
   return totalCost;
@@ -157,8 +158,9 @@ PerspectiveTransform ParticleFilter::getEstimateTransform() {
 void ParticleFilter::drawParticles(Mat& dest, Scalar color) {
   for (vector<Particle>::iterator it = particles.begin();
       it != particles.end(); ++it) {
-    Point3d p = it->t.getTranslation();
-    Point3d va = it->t.getViewingAngle();
-    circle(dest, Point(p.x - va.x, p.y - va.y), 3, color, -1);
+    //Point3d p = it->t.getTranslation();
+    //Point3d va = it->t.getViewingAngle();
+    Point p = it->t.transformPoint(Point(0, 0));
+    circle(dest, p, 1, color, -1);
   }
 }
