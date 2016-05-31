@@ -42,6 +42,19 @@ class ParticleFilter {
     double totalCost;
     PerspectiveTransform estimateTrans;
     boost::mt19937 rng;
+
+    struct transform {
+      int32_t transform[9];
+      int16_t translate_x;
+      int16_t translate_y;
+      int16_t translate_z;
+    };
+
+    int *score_mem;
+    struct transform *transform_mem;
+    char *template_mem;
+    char *image_mem;
+    int mem_file;
 };
 
 #endif

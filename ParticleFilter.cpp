@@ -5,6 +5,9 @@
 #include <iostream>
 #include <boost/random.hpp>
 #include <boost/random/normal_distribution.hpp>
+#include <stdio.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
 using namespace std;
 using namespace cv;
@@ -21,6 +24,38 @@ void ParticleFilter::initalise(Mat& frame, Mat& track, int numParticles) {
             Point3d(-frame.cols / 2, -frame.rows / 2, frame.cols)));
     particles.push_back(p);
   } 
+
+  // Map in the fpga
+  int mem_file = open("/dev/mem", O_RDWR);
+  score_mem = (int*)mmap(NULL, 100, PROT_READ | PROT_WRITE,
+            MAP_SHARED, mem_file, 0x42000000);
+  if (score_mem == NULL) {
+    printf("mmap failed\n");
+    abort();
+  }
+
+  transform_mem = (struct transform*)mmap(NULL, 200,
+      PROT_READ | PROT_WRITE, MAP_SHARED, mem_file, 0x48000000);
+  if (transform_mem == NULL) {
+    printf("mmap failed\n");
+    abort();
+  }
+
+  template_mem = (char*)mmap(NULL, 1024, PROT_READ | PROT_WRITE,
+            MAP_SHARED, mem_file, 0x44000000);
+  if (template_mem == NULL) {
+    printf("mmap failed\n");
+    abort();
+  }
+
+  // 128 * 128 * 4
+  image_mem = (char*)mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+            MAP_SHARED, mem_file, 0x46000000);
+  if (score_mem == NULL) {
+    printf("mmap failed\n");
+    abort();
+  }
+
 }
 
 void ParticleFilter::update(Mat& frame) {
@@ -107,15 +142,40 @@ void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
 
 void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
   Particle> >& cdf) {
+  for (int i = 0; i < particles.size(); ++i) {
+    // Put the transform data in the memory
+    cv::Mat t = particles[i].t.getTransform(); // get rid of copy here
+    for (int j = 0; j < 9; ++j) {
+      // 1 signed bit, 19.12 bits for data
+      double d = t.at<double>(j % 3, j / 3);
+      transform_mem[i].transform[j] = d * 4096;
+    } 
+    cv::Point3d p = particles[i].t.getTranslation();
+    transform_mem[i].translate_x = p.x;
+    transform_mem[i].translate_y = p.y;
+    transform_mem[i].translate_z = p.z;
+  }
+  // Put the image in fpga
+  // copy 128 * 128 of data
+  for (int i = 0; i < 128; ++i) {
+    Vec3b *fr = frame.ptr<Vec3b>(i);
+    for (int j = 0; j < 128; ++j) {
+      image_mem[j + (128 * i)] = fr[j][0];
+      image_mem[j + (128 * i) + 1] = fr[j][1];
+      image_mem[j + (128 * i) + 2] = fr[j][2];
+    }
+  }
+
+  // Run the square diff cost
+  // Write to config register
+  // Poll until done
+
   totalCost = 0;
-  for (vector<Particle>::iterator it = particles.begin(); 
-      it != particles.end(); ++it) {
-    //cout << it->t.getTransform() << endl;
-    double score = squareDiffCost(frame, tracked, it->t);
-    it->score = inverseScore(score);
-    totalCost += it->score;
-    //cout << totalCost << " " << score << " " << it->score << endl;
-    cdf.push_back(make_pair(totalCost, *it));
+  for (int i = 0; i < particles.size(); ++i) {
+    double score = score_mem[i];
+    particles[i].score = inverseScore(score);
+    totalCost += particles[i].score;
+    cdf.push_back(make_pair(totalCost, particles[i]));
   }
 }
 
