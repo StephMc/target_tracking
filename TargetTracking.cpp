@@ -23,7 +23,7 @@ int main( int argc, char** argv )
     return -1;
   }
   video >> frame;
-  resize(frame, frame, Size(), 0.35, 0.35);
+  resize(frame, frame, Size(), 0.2, 0.2);
   cout << frame.cols << " " << frame.rows << endl;
   imshow("d", frame);
   waitKey(0);
@@ -43,9 +43,9 @@ int main( int argc, char** argv )
     char key = waitKey(1);
     if (key == 'q') break;
     video >> frame;
-    resize(frame, frame, Size(), 0.35, 0.35);
+    resize(frame, frame, Size(), 0.2, 0.2);
     if (!initalised) {
-      particleFilter.initalise(frame, objectToTrack, 1000);
+      particleFilter.initalise(frame, objectToTrack, 10);
       initalised = true;
     }
     particleFilter.update(frame);

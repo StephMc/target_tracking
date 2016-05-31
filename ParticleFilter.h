@@ -27,8 +27,8 @@ class ParticleFilter {
 
     void getCosts(cv::Mat& frame, std::vector<std::pair<double, Particle> >& cdf);
     double inverseScore(double score);
-    double squareDiffCost(cv::Mat& source, cv::Mat& track,
-        PerspectiveTransform at);
+    //double squareDiffCost(cv::Mat& source, cv::Mat& track,
+    //    PerspectiveTransform at);
     void resample(std::vector<std::pair<double, Particle> >& cdf, cv::Mat& frame);
     void estimateState();
     Particle findParticle(std::vector<std::pair<double, Particle> >& cdf, 
@@ -43,11 +43,12 @@ class ParticleFilter {
     PerspectiveTransform estimateTrans;
     boost::mt19937 rng;
 
-    struct transform {
+    struct __attribute__((__packed__)) transform {
       int32_t transform[9];
-      int16_t translate_x;
-      int16_t translate_y;
-      int16_t translate_z;
+      int32_t translate_x;
+      int32_t translate_y;
+      int32_t translate_z;
+      int32_t padding[4];
     };
 
     int *score_mem;

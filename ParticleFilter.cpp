@@ -12,6 +12,8 @@
 using namespace std;
 using namespace cv;
 
+void write_image(int32_t *mem, Mat& frame, int maxx, int maxy);
+
 void ParticleFilter::initalise(Mat& frame, Mat& track, int numParticles) {
   track.copyTo(tracked);
   particles.clear();
@@ -27,21 +29,21 @@ void ParticleFilter::initalise(Mat& frame, Mat& track, int numParticles) {
 
   // Map in the fpga
   int mem_file = open("/dev/mem", O_RDWR);
-  score_mem = (int*)mmap(NULL, 100, PROT_READ | PROT_WRITE,
-            MAP_SHARED, mem_file, 0x42000000);
+  score_mem = (int32_t*)mmap(NULL, 100, PROT_READ | PROT_WRITE,
+            MAP_SHARED, mem_file, 0x46000000);
   if (score_mem == NULL) {
     printf("mmap failed\n");
     abort();
   }
 
   transform_mem = (struct transform*)mmap(NULL, 200,
-      PROT_READ | PROT_WRITE, MAP_SHARED, mem_file, 0x48000000);
+      PROT_READ | PROT_WRITE, MAP_SHARED, mem_file, 0x40000000);
   if (transform_mem == NULL) {
     printf("mmap failed\n");
     abort();
   }
 
-  template_mem = (char*)mmap(NULL, 1024, PROT_READ | PROT_WRITE,
+  template_mem = (int32_t*)mmap(NULL, 1024, PROT_READ | PROT_WRITE,
             MAP_SHARED, mem_file, 0x44000000);
   if (template_mem == NULL) {
     printf("mmap failed\n");
@@ -49,13 +51,30 @@ void ParticleFilter::initalise(Mat& frame, Mat& track, int numParticles) {
   }
 
   // 128 * 128 * 4
-  image_mem = (char*)mmap(NULL, 65536, PROT_READ | PROT_WRITE,
-            MAP_SHARED, mem_file, 0x46000000);
+  image_mem = (int32_t*)mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+            MAP_SHARED, mem_file, 0x42000000);
   if (score_mem == NULL) {
     printf("mmap failed\n");
     abort();
   }
 
+  cpu_regs = (int32_t*)mmap(NULL, 100, PROT_READ | PROT_WRITE,
+            MAP_SHARED, mem_file, 0x43C00000);
+  if (cpu_regs == NULL) {
+    printf("mmap cpu regs failed\n");
+    abort();
+  }
+
+  // Configure constants
+  cpu_regs[1] = 0x000A000A; // template (10 * 10)
+  cpu_regs[2] = 0x00800080; // x & y image (128 * 128)
+  cpu_regs[3] = num_particles; // particles
+  cpu_regs[4] = (-frame.cols/2) * 4096;
+  cpu_regs[5] = (-frame.rows/2) * 4096;
+  cpu_regs[6] = frame.cols * 4096;
+
+  // Transfer template
+  write_image(template_mem, track, 10, 10);
 }
 
 void ParticleFilter::update(Mat& frame) {
@@ -140,8 +159,28 @@ void ParticleFilter::resample(vector<pair<double, Particle> >& cdf,
   }
 }
 
-void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
-  Particle> >& cdf) {
+void start_wait() {
+  //int32_t *cpu_regs = (int32_t*) 0x43C00000;
+  cpu_regs[0] = 1; // start
+  print("Start\n\r");
+  while(cpu_regs[0] == 0);
+  cpu_regs[0] = 0;
+  cpu_regs[0] = 2;
+  cpu_regs[0] = 0;
+  print("Stop\n\r");
+}
+
+void write_image(int32_t *mem, Mat& frame, int maxx, int maxy) {
+  for (int i = 0; i < maxy; ++i) {
+    Vec3b *fr = frame.ptr<Vec3b>(i);
+    int yoff = maxx * i;
+    for (int j = 0; j < maxx; ++j) {
+      mem[j + off] = (fr[j][2] << 16) + (fr[j][1] << 8) + fr[j][0];
+    }
+  }
+}
+
+void write_transforms() {
   for (int i = 0; i < particles.size(); ++i) {
     // Put the transform data in the memory
     cv::Mat t = particles[i].t.getTransform(); // get rid of copy here
@@ -151,25 +190,24 @@ void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
       transform_mem[i].transform[j] = d * 4096;
     } 
     cv::Point3d p = particles[i].t.getTranslation();
-    transform_mem[i].translate_x = p.x;
-    transform_mem[i].translate_y = p.y;
-    transform_mem[i].translate_z = p.z;
+    transform_mem[i].translate_x = p.x * 4096;
+    transform_mem[i].translate_y = p.y * 4096;
+    transform_mem[i].translate_z = p.z * 4096;
   }
+
+}
+
+void ParticleFilter::getCosts(Mat& frame, vector<pair<double,
+  Particle> >& cdf) {
+  // Write current transforms to fpga
+  write_transforms();
+
   // Put the image in fpga
-  // copy 128 * 128 of data
-  for (int i = 0; i < 128; ++i) {
-    Vec3b *fr = frame.ptr<Vec3b>(i);
-    for (int j = 0; j < 128; ++j) {
-      image_mem[j + (128 * i)] = fr[j][0];
-      image_mem[j + (128 * i) + 1] = fr[j][1];
-      image_mem[j + (128 * i) + 2] = fr[j][2];
-    }
-  }
+  write_image(image_mem, frame, frame.cols, frame.rows);
 
-  // Run the square diff cost
-  // Write to config register
-  // Poll until done
+  start_wait();
 
+  // Read results
   totalCost = 0;
   for (int i = 0; i < particles.size(); ++i) {
     double score = score_mem[i];
@@ -187,7 +225,7 @@ double ParticleFilter::inverseScore(double score) {
   return ((maxScore - score) / maxScore) + 0.001;
 }
 
-double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
+/*double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
     PerspectiveTransform at) {
   double totalCost = 0;
   for (int row = 0; row < track.rows; ++row) {
@@ -209,7 +247,7 @@ double ParticleFilter::squareDiffCost(Mat& frame, Mat& track,
     }
   }
   return totalCost;
-}
+}*/
 
 PerspectiveTransform ParticleFilter::getEstimateTransform() {
   return estimateTrans;
